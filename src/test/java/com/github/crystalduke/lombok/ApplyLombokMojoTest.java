@@ -8,7 +8,7 @@ import static org.junit.Assert.*;
 import org.junit.Test;
 import java.io.File;
 
-public class MyMojoTest {
+public class ApplyLombokMojoTest {
 
     @Rule
     public MojoRule rule = new MojoRule() {
@@ -22,25 +22,22 @@ public class MyMojoTest {
     };
 
     /**
+     * 現時点では詳細なテストは実装していない.
+     *
      * @throws Exception if any
      */
     @Test
     public void testSomething() throws Exception {
         File pom = new File("target/test-classes/project-to-test/");
-        assertNotNull(pom);
         assertTrue(pom.exists());
 
-        MyMojo myMojo = (MyMojo) rule.lookupConfiguredMojo(pom, "touch");
+        ApplyLombokMojo myMojo = (ApplyLombokMojo) rule.lookupConfiguredMojo(pom, "apply");
         assertNotNull(myMojo);
+        assertNotNull(rule.getVariableValueFromObject(myMojo, "sourceDirectory"));
+        assertNotNull(rule.getVariableValueFromObject(myMojo, "encoding"));
+        assertNotNull(rule.getVariableValueFromObject(myMojo, "languageLevel"));
+
         myMojo.execute();
-
-        File outputDirectory = (File) rule.getVariableValueFromObject(myMojo, "outputDirectory");
-        assertNotNull(outputDirectory);
-        assertTrue(outputDirectory.exists());
-
-        File touch = new File(outputDirectory, "touch.txt");
-        assertTrue(touch.exists());
-
     }
 
     /**
