@@ -1,15 +1,18 @@
 package com.github.crystalduke.lombok;
 
+import com.github.javaparser.JavaToken;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.TokenRange;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.comments.Comment;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -98,23 +101,106 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
             imports.addAll(apply(field, new GeneratedGetterPredicate(field), Getter.class));
             imports.addAll(apply(field, new GeneratedSetterPredicate(field), Setter.class));
         }
-        for (Class<?> clazz : imports) {
-            cu.addImport(clazz);
-        }
         boolean modified = imports.isEmpty() == false;
+        if (modified) {
+            cu = refresh(cu);
+        }
+        for (Class<?> clazz : imports) {
+            if (addImport(cu, clazz)) {
+                cu = refresh(cu);
+            }
+        }
         for (TypeDeclaration typeDeclaration : cu.findAll(TypeDeclaration.class)) {
             modified |= apply(typeDeclaration, Getter.class);
             modified |= apply(typeDeclaration, Setter.class);
         }
+        cu = refresh(cu);
         if (modified) {
             try (BufferedWriter writer = Files.newBufferedWriter(absolutePath,
                     config.getCharacterEncoding())) {
-                writer.write(LexicalPreservingPrinter.print(cu));
+                writer.write(TokenUtil.asString(cu));
             } catch (IOException ex) {
                 throw new UncheckedIOException(ex);
             }
         }
         return SourceRoot.Callback.Result.DONT_SAVE;
+    }
+
+    private static CompilationUnit refresh(CompilationUnit cu) {
+        String code = TokenUtil.asString(cu);
+        cu = StaticJavaParser.parse(code);
+        LexicalPreservingPrinter.setup(cu);
+        return cu;
+    }
+
+    private static boolean match(ImportDeclaration declaration, Class<?> clazz) {
+        if (declaration.isStatic()) {
+            return false;
+        }
+        final String identifier = declaration.getName().asString();
+        return declaration.isAsterisk() && clazz.getPackage().getName().equals(identifier)
+                || clazz.getName().equals(identifier);
+    }
+
+    private static boolean isImported(CompilationUnit cu, Class<?> clazz) {
+        return cu.findAll(ImportDeclaration.class)
+                .stream()
+                .anyMatch(declaration -> match(declaration, clazz));
+    }
+
+    private static boolean addImport(CompilationUnit cu, Class<?> clazz) {
+        if (isImported(cu, clazz)) {
+            return false;
+        }
+        ImportDeclaration importDeclaration = TokenUtil.clone(
+                new ImportDeclaration(clazz.getName(), false, false));
+        Node previousNode = null;
+        for (Node node : cu.getChildNodes()) {
+            if (ImportDeclaration.class.isInstance(node)) {
+                previousNode = node;
+            }
+        }
+        if (previousNode != null) {
+            JavaToken previousToken = previousNode.getTokenRange().get().getEnd();
+            boolean found = false;
+            JavaToken eol = null;
+            for (JavaToken token = previousToken, nextToken;
+                    !found && token.getNextToken().isPresent();
+                    token = nextToken) {
+                nextToken = token.getNextToken().get();
+                switch (nextToken.getCategory()) {
+                    case WHITESPACE_NO_EOL:
+                        break;
+                    case COMMENT:
+                        if (nextToken.getText().contains("\n")) {
+                            found = true;
+                        }
+                        break;
+                    case EOL:
+                        previousToken = token;
+                        eol = TokenUtil.clone(nextToken);
+                        found = true;
+                        break;
+                }
+            }
+            JavaToken nextToken = previousToken.getNextToken().get();
+            nextToken.insert(eol != null ? eol : TokenUtil.lineSeparator(cu));
+            for (JavaToken token : importDeclaration.getTokenRange().get()) {
+                nextToken.insert(token);
+            }
+        } else {
+            Node nextNode = cu.findFirst(TypeDeclaration.class).get();
+            if (nextNode.getComment().isPresent()) {
+                nextNode = nextNode.getComment().get();
+            }
+            JavaToken nextToken = nextNode.getTokenRange().get().getBegin();
+            for (JavaToken token : importDeclaration.getTokenRange().get()) {
+                nextToken.insert(token);
+            }
+            nextToken.insert(TokenUtil.lineSeparator(cu));
+            nextToken.insert(TokenUtil.lineSeparator(cu));
+        }
+        return true;
     }
 
     private static AccessLevel toAccessLevel(MethodDeclaration method) {
@@ -193,8 +279,12 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
     }
 
     private static void remove(MethodDeclaration method) {
-        method.getComment().ifPresent(Comment::remove);
-        method.remove();
+        TokenRange removed = TokenUtil.remove(method);
+        for (JavaToken token : removed) {
+            if (!token.getCategory().isWhitespaceOrComment()) {
+                break;
+            }
+        }
     }
 
     private static <N extends Node> boolean hasAnnotation(NodeWithAnnotations<N> node, String simpleName) {
@@ -224,15 +314,21 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
                 || !annotations.stream().allMatch(Optional::isPresent)) {
             return false;
         }
-        typeDeclaration.addAnnotation(new MarkerAnnotationExpr(simpleName));
-        annotations.forEach(annotation -> annotation.get().remove());
+        TokenUtil.addAnnotation(typeDeclaration, new MarkerAnnotationExpr(simpleName));
+        annotations.forEach(annotation -> TokenUtil.remove(annotation.get()));
         return true;
     }
 
     public Set<Class<?>> apply(FieldDeclaration fieldDeclaration,
             Predicate<MethodDeclaration> methodPredicate,
             Class<? extends Annotation> annotationClass) {
-        if (hasAnnotation(fieldDeclaration, annotationClass.getSimpleName())) {
+        final String simpleName = annotationClass.getSimpleName();
+        if (hasAnnotation(fieldDeclaration, simpleName)
+                || fieldDeclaration.getParentNode()
+                        .filter(TypeDeclaration.class::isInstance)
+                        .map(TypeDeclaration.class::cast)
+                        .filter(type -> hasAnnotation(type, simpleName))
+                        .isPresent()) {
             // 既にアノテーションがある
             return Collections.emptySet();
         }
@@ -256,7 +352,11 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
             imports.add(AccessLevel.class);
         }
         remove(method);
-        fieldDeclaration.addAnnotation(annotation);
+        NodeList<Modifier> modifiers = fieldDeclaration.getModifiers();
+        Node addAnnotationBefore = modifiers.isEmpty()
+                ? fieldDeclaration.getVariable(0).getType()
+                : modifiers.get(0);
+        TokenUtil.addAnnotation(addAnnotationBefore, annotation);
         return imports;
     }
 }
