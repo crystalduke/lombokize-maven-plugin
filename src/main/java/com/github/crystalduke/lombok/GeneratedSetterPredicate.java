@@ -44,7 +44,7 @@ public class GeneratedSetterPredicate extends GeneratedMethodPredicate {
                 // 代入演算子は等号
                 .filter(assignExpr -> assignExpr.getOperator().equals(AssignExpr.Operator.ASSIGN))
                 // 左辺はフィールド
-                .filter(assignExpr -> isReferencedFrom(assignExpr.getTarget()))
+                .filter(assignExpr -> isReferredFrom(assignExpr.getTarget()))
                 // 右辺は引数
                 .map(AssignExpr::getValue)
                 .filter(Expression::isNameExpr)

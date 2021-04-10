@@ -60,7 +60,7 @@ class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
                 && method.getThrownExceptions().isEmpty();
     }
 
-    boolean isReferencedFrom(Expression expression) {
+    boolean isReferredFrom(Expression expression) {
         if (expression.isNameExpr()) {
             // フィールド名だけ
             final NameExpr nameExpr = expression.asNameExpr();

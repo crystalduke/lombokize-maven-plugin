@@ -36,7 +36,7 @@ public class GeneratedGetterPredicate extends GeneratedMethodPredicate {
                 .map(statement -> statement.asReturnStmt().getExpression())
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .filter(this::isReferencedFrom)
+                .filter(this::isReferredFrom)
                 .isPresent();
     }
 }
