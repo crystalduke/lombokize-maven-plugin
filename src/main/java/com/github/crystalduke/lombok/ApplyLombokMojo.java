@@ -309,6 +309,7 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
                 .stream()
                 .filter(FieldDeclaration.class::isInstance)
                 .map(FieldDeclaration.class::cast)
+                .filter(field -> !field.isStatic())
                 .map(field -> field.getAnnotationByClass(clazz))
                 .map(ann -> ann.filter(MarkerAnnotationExpr.class::isInstance))
                 .collect(Collectors.toList());
