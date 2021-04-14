@@ -112,7 +112,9 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
         }
         for (TypeDeclaration typeDeclaration : cu.findAll(TypeDeclaration.class)) {
             modified |= apply(typeDeclaration, Getter.class);
-            modified |= apply(typeDeclaration, Setter.class);
+            if (!typeDeclaration.isEnumDeclaration()) {
+                modified |= apply(typeDeclaration, Setter.class);
+            }
         }
         cu = refresh(cu);
         if (modified) {
