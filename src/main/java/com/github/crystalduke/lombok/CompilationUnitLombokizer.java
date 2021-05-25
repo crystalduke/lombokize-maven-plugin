@@ -18,13 +18,21 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
  * {@link CompilationUnit} 単位で Lombok アノテーションを適用するクラス.
  */
+@AllArgsConstructor
 public class CompilationUnitLombokizer implements Function<CompilationUnit, CompilationUnit> {
+
+    private final boolean jdk7;
+
+    public CompilationUnitLombokizer() {
+        this(false);
+    }
 
     /**
      * Lombok アノテーションを適用した {@link CompilationUnit} を返す.
@@ -35,8 +43,8 @@ public class CompilationUnitLombokizer implements Function<CompilationUnit, Comp
     @Override
     public CompilationUnit apply(CompilationUnit cu) {
         LexicalPreservingPrinter.setup(cu);
-        final FieldLombokizer getter = FieldLombokizer.forGetter();
-        final FieldLombokizer setter = FieldLombokizer.forSetter();
+        final FieldLombokizer getter = FieldLombokizer.forGetter(jdk7);
+        final FieldLombokizer setter = FieldLombokizer.forSetter(jdk7);
         // フィールド単位にアノテーションを適用する
         boolean modified = false;
         for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {

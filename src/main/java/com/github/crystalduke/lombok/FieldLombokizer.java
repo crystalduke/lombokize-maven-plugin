@@ -27,16 +27,19 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
  * Lombok アノテーションを適用し、メソッドを削除する.
  */
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
 
     final Class<? extends Annotation> annotationClass;
     final Function<FieldDeclaration, Predicate<MethodDeclaration>> predicate;
+    final boolean jdk7;
 
     /**
      * {@link Getter} を適用してメソッドを削除するインスタンスを返す.
@@ -44,7 +47,17 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
      * @return {@link Getter} を適用するインスタンス.
      */
     public static FieldLombokizer forGetter() {
-        return new FieldLombokizer(Getter.class, GeneratedGetterPredicate::new);
+        return forGetter(false);
+    }
+
+    /**
+     * {@link Getter} を適用してメソッドを削除するインスタンスを返す.
+     *
+     * @param jdk7 JDK 7 用のソースを出力する場合は {@code true}, そうでなければ {@code false}.
+     * @return {@link Getter} を適用するインスタンス.
+     */
+    public static FieldLombokizer forGetter(boolean jdk7) {
+        return new FieldLombokizer(Getter.class, GeneratedGetterPredicate::new, jdk7);
     }
 
     /**
@@ -53,17 +66,22 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
      * @return {@link Setter} を適用するインスタンス.
      */
     public static FieldLombokizer forSetter() {
-        return new FieldLombokizer(Setter.class, GeneratedSetterPredicate::new);
-    }
-
-    private FieldLombokizer(Class<? extends Annotation> annotationClass,
-            Function<FieldDeclaration, Predicate<MethodDeclaration>> predicate) {
-        this.annotationClass = annotationClass;
-        this.predicate = predicate;
+        return forSetter(false);
     }
 
     /**
-     * 全ての非 static フィールドに属性のないアノテーションが付与されていた場合, フィールドのアノテーションは削除し,クラスにアノテーションを付与する.
+     * {@link Setter} を適用してメソッドを削除するインスタンスを返す.
+     *
+     * @param jdk7 JDK 7 用のソースを出力する場合は {@code true}, そうでなければ {@code false}.
+     * @return {@link Setter} を適用するインスタンス.
+     */
+    public static FieldLombokizer forSetter(boolean jdk7) {
+        return new FieldLombokizer(Setter.class, GeneratedSetterPredicate::new, jdk7);
+    }
+
+    /**
+     * 全ての非 static フィールドに属性のないアノテーションが付与されていた場合,
+     * フィールドのアノテーションは削除し,クラスにアノテーションを付与する.
      *
      * @param typeDeclaration 型宣言
      * @return クラスにアノテーションを付与した場合は {@code true}, それ以外は {@code false}.
@@ -152,7 +170,7 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
                 .anyMatch(simpleName::equals);
     }
 
-    private static AnnotationExpr createAnnotation(MethodDeclaration method, Class<? extends Annotation> clazz) {
+    private AnnotationExpr createAnnotation(MethodDeclaration method, Class<? extends Annotation> clazz) {
         NodeList<Expression> methodAnnotations = convertType(method.getAnnotations());
         NodeList<Expression> paramAnnotations = method.getParameters().isEmpty()
                 // Getter は引数無し
@@ -162,6 +180,10 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
         String className = clazz.getSimpleName();
         FieldAccessExpr accessLevel = toAccessLevelExpr(method);
         if (methodAnnotations.isEmpty() && paramAnnotations.isEmpty()) {
+//            // map で cast するのがイマイチ
+//            return Optional.of(accessLevel)
+//                    .map(level -> (AnnotationExpr)new SingleMemberAnnotationExpr(new Name(className), level))
+//                    .orElse(new MarkerAnnotationExpr(className));
             return accessLevel == null
                     ? new MarkerAnnotationExpr(className)
                     : new SingleMemberAnnotationExpr(new Name(className), accessLevel);
@@ -170,17 +192,26 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
         if (accessLevel != null) {
             attributes.add(new MemberValuePair("value", accessLevel));
         }
-        if (!methodAnnotations.isEmpty()) {
-            attributes.add(new MemberValuePair("onMethod",
-                    new SingleMemberAnnotationExpr(new Name("__"),
-                            new ArrayInitializerExpr(methodAnnotations))));
-        }
-        if (!paramAnnotations.isEmpty()) {
-            attributes.add(new MemberValuePair("onParam",
-                    new SingleMemberAnnotationExpr(new Name("__"),
-                            new ArrayInitializerExpr(paramAnnotations))));
-        }
+        toAttribute(methodAnnotations, "onMethod").ifPresent(attributes::add);
+        toAttribute(paramAnnotations, "onParam").ifPresent(attributes::add);
         return new NormalAnnotationExpr(new Name(className), attributes);
+    }
+
+    private Optional<MemberValuePair> toAttribute(
+            NodeList<Expression> annotations,
+            String attributeName) {
+        if (annotations.isEmpty()) {
+            return Optional.empty();
+        }
+        Expression value = annotations.size() == 1
+                ? annotations.get(0)
+                : new ArrayInitializerExpr(annotations);
+        if (jdk7) {
+            value = new SingleMemberAnnotationExpr(new Name("__"), value);
+        } else {
+            attributeName += "_";
+        }
+        return Optional.of(new MemberValuePair(attributeName, value));
     }
 
     /**

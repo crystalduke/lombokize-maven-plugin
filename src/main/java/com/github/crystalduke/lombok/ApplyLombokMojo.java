@@ -2,6 +2,7 @@ package com.github.crystalduke.lombok;
 
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
+import static com.github.javaparser.ParserConfiguration.LanguageLevel.*;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.utils.SourceRoot;
@@ -12,6 +13,8 @@ import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.EnumSet;
+import java.util.Set;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -29,8 +32,23 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
     @Parameter(property = "lombokize.encoding")
     private String encoding;
     @Parameter(property = "lombokize.languageLevel")
-    private ParserConfiguration.LanguageLevel languageLevel;
+    private String languageLevel;
     ParserConfiguration config = new ParserConfiguration();
+    Set<ParserConfiguration.LanguageLevel> unsupportedLevels
+            = EnumSet.of(JAVA_1_0, JAVA_1_1, JAVA_1_2, JAVA_1_3, JAVA_1_4, JAVA_5, JAVA_6);
+    boolean jdk7;
+
+    private static ParserConfiguration.LanguageLevel toLanguageLevel(String level) {
+        if (level == null) {
+            return null;
+        }
+        if (level.matches("^1\\.[0-4]$")) {
+            level = level.replace('.', '_');
+        } else if (level.matches("1\\.[5-8]$")) {
+            level = level.substring(2);
+        }
+        return ParserConfiguration.LanguageLevel.valueOf("JAVA_" + level);
+    }
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -43,8 +61,12 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
         }
         config.setLexicalPreservationEnabled(true);
         if (languageLevel != null) {
-            config.setLanguageLevel(languageLevel);
+            config.setLanguageLevel(toLanguageLevel(languageLevel));
+            if (unsupportedLevels.contains(config.getLanguageLevel())) {
+                throw new IllegalStateException("Unsupported language level: " + languageLevel);
+            }
         }
+        jdk7 = config.getLanguageLevel().equals(JAVA_7);
         SourceRoot srcRoot = new SourceRoot(rootPath, config);
         StaticJavaParser.setConfiguration(config);
         try {
@@ -61,7 +83,7 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
             return Result.TERMINATE;
         }
         CompilationUnit original = result.getResult().get();
-        CompilationUnit cu = new CompilationUnitLombokizer().apply(original);
+        CompilationUnit cu = new CompilationUnitLombokizer(jdk7).apply(original);
         if (original != cu) {
             try (BufferedWriter writer = Files.newBufferedWriter(absolutePath,
                     config.getCharacterEncoding())) {
