@@ -178,20 +178,16 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
                 // Setter は引数が１つだけなので、最初のパラメータを抽出
                 : convertType(method.getParameter(0).getAnnotations());
         String className = clazz.getSimpleName();
-        FieldAccessExpr accessLevel = toAccessLevelExpr(method);
+        Optional<FieldAccessExpr> accessLevel = toAccessLevelExpr(method);
         if (methodAnnotations.isEmpty() && paramAnnotations.isEmpty()) {
-//            // map で cast するのがイマイチ
-//            return Optional.of(accessLevel)
-//                    .map(level -> (AnnotationExpr)new SingleMemberAnnotationExpr(new Name(className), level))
-//                    .orElse(new MarkerAnnotationExpr(className));
-            return accessLevel == null
-                    ? new MarkerAnnotationExpr(className)
-                    : new SingleMemberAnnotationExpr(new Name(className), accessLevel);
+            return accessLevel
+                    .map(level -> new SingleMemberAnnotationExpr(new Name(className), level))
+                    .map(AnnotationExpr.class::cast)
+                    .orElse(new MarkerAnnotationExpr(className));
         }
         NodeList<MemberValuePair> attributes = new NodeList<>();
-        if (accessLevel != null) {
-            attributes.add(new MemberValuePair("value", accessLevel));
-        }
+        accessLevel.map(level -> new MemberValuePair("value", level))
+                .ifPresent(attributes::add);
         toAttribute(methodAnnotations, "onMethod").ifPresent(attributes::add);
         toAttribute(paramAnnotations, "onParam").ifPresent(attributes::add);
         return new NormalAnnotationExpr(new Name(className), attributes);
@@ -226,15 +222,15 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
                         .collect(Collectors.toList()));
     }
 
-    private static FieldAccessExpr toAccessLevelExpr(MethodDeclaration method) {
+    private static Optional<FieldAccessExpr> toAccessLevelExpr(MethodDeclaration method) {
         AccessLevel accessLevel = toAccessLevel(method);
         switch (accessLevel) {
             case PUBLIC:
-                return null;
+                return Optional.empty();
             default:
-                return new FieldAccessExpr(
+                return Optional.of(new FieldAccessExpr(
                         new NameExpr(AccessLevel.class.getSimpleName()),
-                        accessLevel.name());
+                        accessLevel.name()));
         }
     }
 
