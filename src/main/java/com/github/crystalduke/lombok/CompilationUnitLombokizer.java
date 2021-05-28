@@ -30,6 +30,9 @@ public class CompilationUnitLombokizer implements Function<CompilationUnit, Comp
 
     private final boolean jdk7;
 
+    /**
+     * JDK 8 以上のソースを対象としたインスタンスを構築する.
+     */
     public CompilationUnitLombokizer() {
         this(false);
     }

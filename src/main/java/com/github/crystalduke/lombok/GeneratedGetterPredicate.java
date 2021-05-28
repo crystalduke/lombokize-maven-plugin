@@ -12,11 +12,22 @@ import lombok.Getter;
  */
 public class GeneratedGetterPredicate extends GeneratedMethodPredicate {
 
+    /**
+     * {@link Getter} を付与するフィールドを指定してオブジェクトを構築する.
+     *
+     * @param fieldDeclaration {@link Getter} を付与するフィールド.
+     */
     public GeneratedGetterPredicate(FieldDeclaration fieldDeclaration) {
         super(fieldDeclaration,
                 type -> "boolean".equals(type) ? "is" : "get");
     }
 
+    /**
+     * 引数のメソッドがオブジェクト構築時に指定したフィールドに {@link Getter} を付与することで生成可能か判定する.
+     *
+     * @param method メソッド定義
+     * @return 生成可能であれば {@code true}, それ以外は {@code false}.
+     */
     @Override
     public boolean test(MethodDeclaration method) {
         return super.test(method)
@@ -36,6 +47,7 @@ public class GeneratedGetterPredicate extends GeneratedMethodPredicate {
                 .map(statement -> statement.asReturnStmt().getExpression())
                 .filter(Optional::isPresent)
                 .map(Optional::get)
+                // 返り値はコンストラクタで指定したフィールド
                 .filter(this::isReferredFrom)
                 .isPresent();
     }

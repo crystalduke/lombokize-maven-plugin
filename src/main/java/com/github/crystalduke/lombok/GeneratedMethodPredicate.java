@@ -49,6 +49,9 @@ class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
         }
     }
 
+    /**
+     * サブクラス共通の判定をする.
+     */
     @Override
     public boolean test(MethodDeclaration method) {
         return methodName.equals(method.getNameAsString())
@@ -60,7 +63,13 @@ class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
                 && method.getThrownExceptions().isEmpty();
     }
 
-    boolean isReferredFrom(Expression expression) {
+    /**
+     * 引数がコンストラクタで指定したフィールドを参照しているか判定する.
+     *
+     * @param expression 式.
+     * @return 引数がコンストラクタで指定したフィールドを参照していれば {@code true}, それ以外は {@code false}.
+     */
+    protected boolean isReferredFrom(Expression expression) {
         if (expression.isNameExpr()) {
             // フィールド名だけ
             final NameExpr nameExpr = expression.asNameExpr();

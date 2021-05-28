@@ -203,8 +203,10 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
                 ? annotations.get(0)
                 : new ArrayInitializerExpr(annotations);
         if (jdk7) {
+            // JDK 7 の場合、onX = @__( ... ) とする
             value = new SingleMemberAnnotationExpr(new Name("__"), value);
         } else {
+            // JDK 8 以降の場合 onX_ = ... とする
             attributeName += "_";
         }
         return Optional.of(new MemberValuePair(attributeName, value));

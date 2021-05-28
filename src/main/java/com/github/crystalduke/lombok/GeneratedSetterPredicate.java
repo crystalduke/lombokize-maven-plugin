@@ -13,11 +13,22 @@ import lombok.Setter;
  */
 public class GeneratedSetterPredicate extends GeneratedMethodPredicate {
 
+    /**
+     * {@link Setter} を付与するフィールドを指定してオブジェクトを構築する.
+     *
+     * @param fieldDeclaration {@link Setter} を付与するフィールド.
+     */
     public GeneratedSetterPredicate(FieldDeclaration fieldDeclaration) {
         super(fieldDeclaration,
                 type -> "set");
     }
 
+    /**
+     * 引数のメソッドがオブジェクト構築時に指定したフィールドに {@link Setter} を付与することで生成可能か判定する.
+     *
+     * @param method メソッド定義
+     * @return 生成可能であれば {@code true}, それ以外は {@code false}.
+     */
     @Override
     public boolean test(MethodDeclaration method) {
         return super.test(method)
@@ -43,7 +54,7 @@ public class GeneratedSetterPredicate extends GeneratedMethodPredicate {
                 .map(Expression::asAssignExpr)
                 // 代入演算子は等号
                 .filter(assignExpr -> assignExpr.getOperator().equals(AssignExpr.Operator.ASSIGN))
-                // 左辺はフィールド
+                // 左辺はオブジェクト構築時に指定したフィールド
                 .filter(assignExpr -> isReferredFrom(assignExpr.getTarget()))
                 // 右辺は引数
                 .map(AssignExpr::getValue)

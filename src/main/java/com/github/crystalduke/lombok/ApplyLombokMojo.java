@@ -43,8 +43,10 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
             return null;
         }
         if (level.matches("^1\\.[0-4]$")) {
+            // 例：1.4 -> 1_4
             level = level.replace('.', '_');
         } else if (level.matches("1\\.[5-8]$")) {
+            // 例：1.5 -> 5
             level = level.substring(2);
         }
         return ParserConfiguration.LanguageLevel.valueOf("JAVA_" + level);
