@@ -126,13 +126,8 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
     @Override
     public Boolean apply(FieldDeclaration fieldDeclaration) {
         final String simpleName = annotationClass.getSimpleName();
-        if (hasAnnotation(fieldDeclaration, simpleName)
-                || fieldDeclaration.getParentNode()
-                        .filter(TypeDeclaration.class::isInstance)
-                        .map(TypeDeclaration.class::cast)
-                        .filter(type -> hasAnnotation(type, simpleName))
-                        .isPresent()) {
-            // フィールドか型宣言にアノテーションがある
+        if (hasAnnotation(fieldDeclaration, simpleName)) {
+            // フィールドにアノテーションがある
             return false;
         }
         Node classBody = fieldDeclaration.getParentNode().get();
