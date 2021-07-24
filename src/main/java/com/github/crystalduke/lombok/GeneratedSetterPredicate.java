@@ -1,7 +1,7 @@
 package com.github.crystalduke.lombok;
 
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.NameExpr;
@@ -16,10 +16,10 @@ public class GeneratedSetterPredicate extends GeneratedMethodPredicate {
     /**
      * {@link Setter} を付与するフィールドを指定してオブジェクトを構築する.
      *
-     * @param fieldDeclaration {@link Setter} を付与するフィールド.
+     * @param variable {@link Setter} を付与するフィールドの変数.
      */
-    public GeneratedSetterPredicate(FieldDeclaration fieldDeclaration) {
-        super(fieldDeclaration,
+    public GeneratedSetterPredicate(VariableDeclarator variable) {
+        super(variable,
                 type -> "set");
     }
 

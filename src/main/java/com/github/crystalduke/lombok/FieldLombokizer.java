@@ -8,6 +8,7 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ArrayInitializerExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -42,7 +43,7 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
     private static final Logger LOG = Logger.getLogger(FieldLombokizer.class.getName());
 
     final Class<? extends Annotation> annotationClass;
-    final Function<FieldDeclaration, Predicate<MethodDeclaration>> predicate;
+    final Function<VariableDeclarator, Predicate<MethodDeclaration>> predicate;
     final boolean jdk7;
 
     /**
@@ -145,54 +146,49 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
     @Override
     public Boolean apply(FieldDeclaration fieldDeclaration) {
         final String simpleName = annotationClass.getSimpleName();
+        final String fieldName = fieldDeclaration.getVariables().stream()
+                .map(VariableDeclarator::getNameAsString)
+                .collect(Collectors.joining(", "));
         if (hasAnnotation(fieldDeclaration, simpleName)) {
-            LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': already annotated.",
-                    new Object[] {
-                        fieldDeclaration.getVariable(0).getNameAsString(),
-                        simpleName
-                    });
+            LOG.log(Level.FINE,
+                    "Field ''{0}'', Annotation ''{1}'': already annotated.",
+                    new Object[]{fieldName, simpleName});
             return false;
         }
+        if (fieldDeclaration.getVariables().size() > 1) {
+            LOG.log(Level.WARNING,
+                    "Field ''{0}'', Annotation ''{1}'': ignore because of multiple variables in one declaration.",
+                    new Object[]{fieldName, simpleName});
+            return false;
+        }
+        final VariableDeclarator variable = fieldDeclaration.getVariable(0);
         Node classBody = fieldDeclaration.getParentNode().get();
         // 対象のフィールドにアノテーションを付与した場合に生成されるメソッドが存在し
         // かつ定義可能であれば、そのメソッドを抽出する.
         List<MethodDeclaration> methods = classBody.getChildNodes().stream()
                 .filter(MethodDeclaration.class::isInstance)
                 .map(MethodDeclaration.class::cast)
-                .filter(predicate.apply(fieldDeclaration))
+                .filter(predicate.apply(variable))
                 .collect(Collectors.toList());
         if (methods.isEmpty()) {
             LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': no appropriate methods.",
-                    new Object[] {
-                        fieldDeclaration.getVariable(0).getNameAsString(),
-                        simpleName
-                    });
+                    new Object[] {fieldName, simpleName});
             return false;
         }
-        if (methods.size() > 1) {
-            // コンパイルエラーとなるはずだが、念のため
-            throw new IllegalStateException();
-        }
+        assert methods.size() == 1;
         MethodDeclaration method = methods.get(0);
         AnnotationExpr annotation = createAnnotation(method, annotationClass);
         TokenUtil.remove(method);
         LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': delete method ''{2}''.",
-                new Object[] {
-                    fieldDeclaration.getVariable(0).getNameAsString(),
-                    simpleName,
-                    method.getNameAsString()
-                });
+                new Object[] {fieldName, simpleName, method.getNameAsString()});
         NodeList<Modifier> modifiers = fieldDeclaration.getModifiers();
         // 修飾子がなければ型の前、あれば最初の修飾子の前にアノテーションを付与する
         Node addAnnotationBefore = modifiers.isEmpty()
-                ? fieldDeclaration.getVariable(0).getType()
+                ? variable.getType()
                 : modifiers.get(0);
         TokenUtil.addAnnotation(addAnnotationBefore, annotation);
         LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': added.",
-                new Object[] {
-                    fieldDeclaration.getVariable(0).getNameAsString(),
-                    simpleName
-                });
+                new Object[] {fieldName, simpleName});
         return true;
     }
 
