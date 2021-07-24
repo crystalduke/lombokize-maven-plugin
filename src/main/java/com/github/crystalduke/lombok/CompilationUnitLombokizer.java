@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -28,6 +30,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class CompilationUnitLombokizer implements Function<CompilationUnit, CompilationUnit> {
 
+    private static final Logger LOG = Logger.getLogger(CompilationUnitLombokizer.class.getName());
     private final boolean jdk7;
 
     /**
@@ -49,13 +52,26 @@ public class CompilationUnitLombokizer implements Function<CompilationUnit, Comp
         final FieldLombokizer getter = FieldLombokizer.forGetter(jdk7);
         final FieldLombokizer setter = FieldLombokizer.forSetter(jdk7);
         // フィールド単位にアノテーションを適用する
-        boolean modified = false;
+        int numOfGetter = 0;
+        int numOfSetter = 0;
+        int numOfFields = 0;
         for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
-            modified |= getter.apply(field);
-            modified |= setter.apply(field);
+            final boolean addGetter = getter.apply(field);
+            final boolean addSetter = setter.apply(field);
+            if (addGetter || addSetter) {
+                numOfFields++;
+            }
+            if (addGetter) {
+                numOfGetter++;
+            }
+            if (addSetter) {
+                numOfSetter++;
+            }
         }
-        if (modified) {
+        if (numOfFields > 0) {
             cu = refresh(cu);
+            LOG.log(Level.INFO, "Added {0} @Getter and {1} @Setter on {2} fields",
+                    new Object[] {numOfGetter, numOfSetter, numOfFields});
             // 適用したアノテーションの import 文を追加する
             Set<Class<?>> imports = new TreeSet<>(Comparator.comparing(Class::getName));
             for (Class<?> clazz : new Class<?>[]{Getter.class, Setter.class}) {
@@ -70,12 +86,13 @@ public class CompilationUnitLombokizer implements Function<CompilationUnit, Comp
             }
             for (Class<?> clazz : imports) {
                 if (addImport(cu, clazz)) {
+                    LOG.log(Level.FINE, "Add import {0}", clazz.getName());
                     cu = refresh(cu);
                 }
             }
         }
         // クラス単位にアノテーションを適用する
-        modified = false;
+        boolean modified = false;
         for (TypeDeclaration typeDeclaration : cu.findAll(TypeDeclaration.class)) {
             modified |= getter.apply(typeDeclaration);
             modified |= setter.apply(typeDeclaration);

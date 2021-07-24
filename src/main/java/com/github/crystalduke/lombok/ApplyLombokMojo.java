@@ -15,6 +15,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -27,16 +29,19 @@ import org.apache.maven.plugins.annotations.Parameter;
 @Mojo(name = "apply", defaultPhase = LifecyclePhase.PROCESS_SOURCES)
 public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback {
 
+    private static final Logger LOG = Logger.getLogger(ApplyLombokMojo.class.getPackage().getName());
+
     @Parameter(defaultValue = "${project.basedir}/src", property = "lombokize.sourceDirectory")
     private File sourceDirectory;
     @Parameter(property = "lombokize.encoding")
     private String encoding;
-    @Parameter(property = "lombokize.languageLevel")
+    @Parameter(defaultValue = "${maven.compiler.source}", property = "lombokize.languageLevel")
     private String languageLevel;
     ParserConfiguration config = new ParserConfiguration();
     Set<ParserConfiguration.LanguageLevel> unsupportedLevels
             = EnumSet.of(JAVA_1_0, JAVA_1_1, JAVA_1_2, JAVA_1_3, JAVA_1_4, JAVA_5, JAVA_6);
     boolean jdk7;
+    private MavenPluginLogHandler handler;
 
     private static ParserConfiguration.LanguageLevel toLanguageLevel(String level) {
         if (level == null) {
@@ -71,29 +76,49 @@ public class ApplyLombokMojo extends AbstractMojo implements SourceRoot.Callback
         jdk7 = config.getLanguageLevel().equals(JAVA_7);
         SourceRoot srcRoot = new SourceRoot(rootPath, config);
         StaticJavaParser.setConfiguration(config);
+        handler = new MavenPluginLogHandler(getLog());
+        boolean useParentHandlers = LOG.getUseParentHandlers();
+        Level logLevel = LOG.getLevel();
         try {
+            LOG.addHandler(handler);
+            LOG.setLevel(Level.ALL);
+            LOG.setUseParentHandlers(false);
             srcRoot.parse("", config, this);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
+        } finally {
+            LOG.setUseParentHandlers(useParentHandlers);
+            LOG.setLevel(logLevel);
+            LOG.removeHandler(handler);
+            handler = null;
         }
     }
 
     @Override
     public SourceRoot.Callback.Result process(Path localPath, Path absolutePath,
             ParseResult<CompilationUnit> result) {
-        if (!result.isSuccessful()) {
-            return Result.TERMINATE;
-        }
-        CompilationUnit original = result.getResult().get();
-        CompilationUnit cu = new CompilationUnitLombokizer(jdk7).apply(original);
-        if (original != cu) {
-            try (BufferedWriter writer = Files.newBufferedWriter(absolutePath,
-                    config.getCharacterEncoding())) {
-                writer.write(TokenUtil.asString(cu));
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
+        handler.setPrefix(localPath.toString() + ": ");
+        try {
+            if (!result.isSuccessful()) {
+                LOG.severe("Parse failed");
+                return Result.TERMINATE;
             }
+            LOG.fine("Parse succeeded");
+            CompilationUnit original = result.getResult().get();
+            CompilationUnit cu = new CompilationUnitLombokizer(jdk7).apply(original);
+            if (original != cu) {
+                try (BufferedWriter writer = Files.newBufferedWriter(absolutePath,
+                        config.getCharacterEncoding())) {
+                    writer.write(TokenUtil.asString(cu));
+                } catch (IOException ex) {
+                    throw new UncheckedIOException(ex);
+                }
+            } else {
+                LOG.info("No changes");
+            }
+            return SourceRoot.Callback.Result.DONT_SAVE;
+        } finally {
+            handler.setPrefix(null);
         }
-        return SourceRoot.Callback.Result.DONT_SAVE;
     }
 }
