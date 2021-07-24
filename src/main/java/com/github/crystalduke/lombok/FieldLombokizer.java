@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -36,6 +38,8 @@ import lombok.Setter;
  */
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
+
+    private static final Logger LOG = Logger.getLogger(FieldLombokizer.class.getName());
 
     final Class<? extends Annotation> annotationClass;
     final Function<FieldDeclaration, Predicate<MethodDeclaration>> predicate;
@@ -94,7 +98,11 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
         }
         final String simpleName = annotationClass.getSimpleName();
         if (hasAnnotation(typeDeclaration, simpleName)) {
-            // 既にアノテーションがある
+            LOG.log(Level.FINE, "Type ''{0}'', Annotation ''{1}'': already annotated.",
+                    new Object[] {
+                        typeDeclaration.getNameAsString(),
+                        simpleName
+                    });
             return false;
         }
         // 属性のないアノテーション (MarkerAnnotationExpr）
@@ -115,11 +123,22 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
         if (annotations.isEmpty()
                 || !annotations.stream().allMatch(Optional::isPresent)) {
             // 非 static フィールドに対象のアノテーションがないか、条件に合致しない
+            LOG.log(Level.FINE, "Type ''{0}'', Annotation ''{1}'': cannot annotate.",
+                    new Object[] {
+                        typeDeclaration.getNameAsString(),
+                        simpleName
+                    });
             return false;
         }
-        // 型宣言にアノテーションを追加して、フィールドから削除する
+        LOG.log(Level.INFO, 
+                "Add ''{1}'' to ''{0}'', and delete {2} annotations on fields.",
+                new Object[] {
+                    typeDeclaration.getNameAsString(),
+                    simpleName,
+                    annotations.size()
+                });
         TokenUtil.addAnnotation(typeDeclaration, new MarkerAnnotationExpr(simpleName));
-        annotations.forEach(annotation -> TokenUtil.remove(annotation.get()));
+        annotations.stream().map(Optional::get).forEach(TokenUtil::remove);
         return true;
     }
 
@@ -127,11 +146,15 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
     public Boolean apply(FieldDeclaration fieldDeclaration) {
         final String simpleName = annotationClass.getSimpleName();
         if (hasAnnotation(fieldDeclaration, simpleName)) {
-            // フィールドにアノテーションがある
+            LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': already annotated.",
+                    new Object[] {
+                        fieldDeclaration.getVariable(0).getNameAsString(),
+                        simpleName
+                    });
             return false;
         }
         Node classBody = fieldDeclaration.getParentNode().get();
-        // 対象のフィールドに @Getter を付与した場合に生成されるメソッドが存在し
+        // 対象のフィールドにアノテーションを付与した場合に生成されるメソッドが存在し
         // かつ定義可能であれば、そのメソッドを抽出する.
         List<MethodDeclaration> methods = classBody.getChildNodes().stream()
                 .filter(MethodDeclaration.class::isInstance)
@@ -139,6 +162,11 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
                 .filter(predicate.apply(fieldDeclaration))
                 .collect(Collectors.toList());
         if (methods.isEmpty()) {
+            LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': no appropriate methods.",
+                    new Object[] {
+                        fieldDeclaration.getVariable(0).getNameAsString(),
+                        simpleName
+                    });
             return false;
         }
         if (methods.size() > 1) {
@@ -148,12 +176,23 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
         MethodDeclaration method = methods.get(0);
         AnnotationExpr annotation = createAnnotation(method, annotationClass);
         TokenUtil.remove(method);
+        LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': delete method ''{2}''.",
+                new Object[] {
+                    fieldDeclaration.getVariable(0).getNameAsString(),
+                    simpleName,
+                    method.getNameAsString()
+                });
         NodeList<Modifier> modifiers = fieldDeclaration.getModifiers();
         // 修飾子がなければ型の前、あれば最初の修飾子の前にアノテーションを付与する
         Node addAnnotationBefore = modifiers.isEmpty()
                 ? fieldDeclaration.getVariable(0).getType()
                 : modifiers.get(0);
         TokenUtil.addAnnotation(addAnnotationBefore, annotation);
+        LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': added.",
+                new Object[] {
+                    fieldDeclaration.getVariable(0).getNameAsString(),
+                    simpleName
+                });
         return true;
     }
 
