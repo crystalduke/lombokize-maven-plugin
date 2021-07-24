@@ -1,7 +1,7 @@
 package com.github.crystalduke.lombok;
 
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import java.util.Optional;
@@ -15,10 +15,10 @@ public class GeneratedGetterPredicate extends GeneratedMethodPredicate {
     /**
      * {@link Getter} を付与するフィールドを指定してオブジェクトを構築する.
      *
-     * @param fieldDeclaration {@link Getter} を付与するフィールド.
+     * @param variable {@link Getter} を付与するフィールドの変数.
      */
-    public GeneratedGetterPredicate(FieldDeclaration fieldDeclaration) {
-        super(fieldDeclaration,
+    public GeneratedGetterPredicate(VariableDeclarator variable) {
+        super(variable,
                 type -> "boolean".equals(type) ? "is" : "get");
     }
 

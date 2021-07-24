@@ -17,7 +17,6 @@ import java.util.function.Predicate;
  */
 class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
 
-    final FieldDeclaration fieldDeclaration;
     final boolean isStatic;
     final String fieldType;
     final String fieldName;
@@ -31,11 +30,12 @@ class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
                 + fieldName.substring(1);
     }
 
-    GeneratedMethodPredicate(FieldDeclaration fieldDeclaration,
+    GeneratedMethodPredicate(VariableDeclarator field,
             Function<String, String> methodPrefix) {
-        this.fieldDeclaration = fieldDeclaration;
+        final FieldDeclaration fieldDeclaration = field.getParentNode()
+                .map(FieldDeclaration.class::cast)
+                .get();
         isStatic = fieldDeclaration.isStatic();
-        final VariableDeclarator field = fieldDeclaration.getVariable(0);
         fieldType = field.getTypeAsString();
         fieldName = field.getName().getIdentifier();
         methodName = toMethodName(fieldName, methodPrefix.apply(fieldType));
