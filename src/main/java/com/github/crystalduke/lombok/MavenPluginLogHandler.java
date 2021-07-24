@@ -65,6 +65,7 @@ public class MavenPluginLogHandler extends Handler {
             }
         };
         setFormatter(formatter);
+        setLevel(Level.ALL);
         consumers = new HashMap<>(3);
         consumers.put(Level.SEVERE, new LogConsumer(log::isErrorEnabled, log::error, log::error, log::error));
         consumers.put(Level.WARNING, new LogConsumer(log::isWarnEnabled, log::warn, log::warn, log::warn));
