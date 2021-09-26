@@ -18,8 +18,7 @@ public class GeneratedGetterPredicate extends GeneratedMethodPredicate {
      * @param variable {@link Getter} を付与するフィールドの変数.
      */
     public GeneratedGetterPredicate(VariableDeclarator variable) {
-        super(variable,
-                type -> "boolean".equals(type) ? "is" : "get");
+        super(variable, isBoolean -> isBoolean ? "is" : "get");
     }
 
     /**
