@@ -19,8 +19,7 @@ public class GeneratedSetterPredicate extends GeneratedMethodPredicate {
      * @param variable {@link Setter} を付与するフィールドの変数.
      */
     public GeneratedSetterPredicate(VariableDeclarator variable) {
-        super(variable,
-                type -> "set");
+        super(variable, isBoolean -> "set");
     }
 
     /**

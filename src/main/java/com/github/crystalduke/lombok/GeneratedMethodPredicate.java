@@ -24,21 +24,27 @@ class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
     final String className;
     final String fqcn;
 
-    private static String toMethodName(String fieldName, String prefix) {
+    private static String toMethodName(String fieldName, boolean isBoolean, String prefix) {
+        if (isBoolean && fieldName.startsWith("is")
+                && fieldName.length() > 2
+                && !Character.isLowerCase(fieldName.charAt(2))) {
+            return prefix + fieldName.substring(2);
+        }
         return prefix
                 + Character.toUpperCase(fieldName.charAt(0))
                 + fieldName.substring(1);
     }
 
     GeneratedMethodPredicate(VariableDeclarator field,
-            Function<String, String> methodPrefix) {
+            Function<Boolean, String> methodPrefix) {
         final FieldDeclaration fieldDeclaration = field.getParentNode()
                 .map(FieldDeclaration.class::cast)
                 .get();
         isStatic = fieldDeclaration.isStatic();
         fieldType = field.getTypeAsString();
         fieldName = field.getName().getIdentifier();
-        methodName = toMethodName(fieldName, methodPrefix.apply(fieldType));
+        boolean isBoolean = "boolean".equals(fieldType);
+        methodName = toMethodName(fieldName, isBoolean, methodPrefix.apply(isBoolean));
         Node classBody = fieldDeclaration.getParentNode().get();
         if (TypeDeclaration.class.isInstance(classBody)) {
             TypeDeclaration<?> type = TypeDeclaration.class.cast(classBody);
