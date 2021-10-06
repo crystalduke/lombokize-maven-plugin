@@ -25,7 +25,6 @@ import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -43,7 +42,7 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
     private static final Logger LOG = Logger.getLogger(FieldLombokizer.class.getName());
 
     final Class<? extends Annotation> annotationClass;
-    final Function<VariableDeclarator, Predicate<MethodDeclaration>> predicate;
+    final Function<VariableDeclarator, GeneratedMethodPredicate> toPredicate;
     final boolean jdk7;
 
     /**
@@ -163,20 +162,25 @@ public class FieldLombokizer implements Function<FieldDeclaration, Boolean> {
         }
         final VariableDeclarator variable = fieldDeclaration.getVariable(0);
         Node classBody = fieldDeclaration.getParentNode().get();
+        final GeneratedMethodPredicate predicate = toPredicate.apply(variable);
         // 対象のフィールドにアノテーションを付与した場合に生成されるメソッドが存在し
         // かつ定義可能であれば、そのメソッドを抽出する.
-        List<MethodDeclaration> methods = classBody.getChildNodes().stream()
+        List<MethodDeclaration> candidateMethods = classBody.getChildNodes().stream()
                 .filter(MethodDeclaration.class::isInstance)
                 .map(MethodDeclaration.class::cast)
-                .filter(predicate.apply(variable))
+                .filter(predicate)
                 .collect(Collectors.toList());
-        if (methods.isEmpty()) {
+        if (candidateMethods.stream().noneMatch(predicate::canGenerate)) {
             LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': no appropriate methods.",
                     new Object[] {fieldName, simpleName});
             return false;
         }
-        assert methods.size() == 1;
-        MethodDeclaration method = methods.get(0);
+        if (candidateMethods.size() > 1) {
+            LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': cannot generate method.",
+                    new Object[] {fieldName, simpleName});
+            return false;
+        }
+        MethodDeclaration method = candidateMethods.get(0);
         AnnotationExpr annotation = createAnnotation(method, annotationClass);
         TokenUtil.remove(method);
         LOG.log(Level.FINE, "Field ''{0}'', Annotation ''{1}'': delete method ''{2}''.",
