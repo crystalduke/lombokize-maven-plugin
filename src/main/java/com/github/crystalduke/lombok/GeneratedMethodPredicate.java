@@ -15,7 +15,7 @@ import java.util.function.Predicate;
 /**
  * Lombok アノテーションにより生成されるメソッドと同じ定義か判定する.
  */
-class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
+abstract class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
 
     final boolean isStatic;
     final String fieldType;
@@ -23,11 +23,15 @@ class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
     final String methodName;
     final String className;
     final String fqcn;
+    
+    protected static boolean startsWithIs(String fieldName) {
+        return fieldName.startsWith("is")
+                && fieldName.length() > 2
+                && !Character.isLowerCase(fieldName.charAt(2));
+    }
 
     private static String toMethodName(String fieldName, boolean isBoolean, String prefix) {
-        if (isBoolean && fieldName.startsWith("is")
-                && fieldName.length() > 2
-                && !Character.isLowerCase(fieldName.charAt(2))) {
+        if (isBoolean && startsWithIs(fieldName)) {
             return prefix + fieldName.substring(2);
         }
         return prefix
@@ -58,8 +62,7 @@ class GeneratedMethodPredicate implements Predicate<MethodDeclaration> {
     /**
      * サブクラス共通の判定をする.
      */
-    @Override
-    public boolean test(MethodDeclaration method) {
+    public boolean canGenerate(MethodDeclaration method) {
         return methodName.equals(method.getNameAsString())
                 && isStatic == method.isStatic()
                 && !method.isAbstract()

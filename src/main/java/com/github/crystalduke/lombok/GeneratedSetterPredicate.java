@@ -1,6 +1,9 @@
 package com.github.crystalduke.lombok;
 
+import static com.github.crystalduke.lombok.GeneratedMethodPredicate.startsWithIs;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
@@ -23,14 +26,35 @@ public class GeneratedSetterPredicate extends GeneratedMethodPredicate {
     }
 
     /**
-     * 引数のメソッドがオブジェクト構築時に指定したフィールドに {@link Setter} を付与することで生成可能か判定する.
+     * 引数のメソッドが存在することで、オブジェクト構築時に指定したフィールドに {@link Setter}
+     * を付与してもメソッドが生成されないか判定する.
      *
      * @param method メソッド定義
      * @return 生成可能であれば {@code true}, それ以外は {@code false}.
      */
     @Override
     public boolean test(MethodDeclaration method) {
-        return super.test(method)
+        if (method.getParameters().size() != 1) {
+            return false;
+        }
+        String name = method.getNameAsString();
+        if (name.equalsIgnoreCase("set" + fieldName)) {
+            return true;
+        }
+        return "boolean".equals(fieldType)
+                && startsWithIs(fieldName)
+                && name.equalsIgnoreCase("set" + fieldName.substring(2));
+    }
+
+    /**
+     * 引数のメソッドがオブジェクト構築時に指定したフィールドに {@link Setter} を付与することで生成可能か判定する.
+     *
+     * @param method メソッド定義
+     * @return 生成可能であれば {@code true}, それ以外は {@code false}.
+     */
+    @Override
+    public boolean canGenerate(MethodDeclaration method) {
+        return super.canGenerate(method)
                 // 返り値の型は void
                 && "void".equals(method.getTypeAsString())
                 // 引数は１つ
