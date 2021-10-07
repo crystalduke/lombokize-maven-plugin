@@ -67,7 +67,58 @@ public class TokenUtil {
             }
             beginToken = previousToken;
         }
-        return remove(beginToken, range.getEnd());
+        JavaToken endToken = removeUntilEol(range.getEnd());
+        if (endToken.getNextToken().isPresent()
+                && endToken.getNextToken().get().getCategory().isEndOfLine()) {
+            // メソッド終了位置から改行まで削除する場合は、最初の改行まで削除しない
+            beginToken = ignoreUntilEol(beginToken);
+        }
+        return remove(beginToken, endToken);
+    }
+
+    private static JavaToken removeUntilEol(JavaToken endToken) {
+        // メソッド終了から行末まで空白文字だけであれば、空白文字も削除する
+        JavaToken token = endToken;
+        while (token.getNextToken().isPresent()) {
+            JavaToken nextToken = token.getNextToken().get();
+            final JavaToken.Category category = nextToken.getCategory();
+            if (category.isEndOfLine()) {
+                break;
+            } else if (!category.isWhitespace()) {
+                // 行末までに空白文字以外があれば、終了位置は引数のまま
+                return endToken;
+            }
+            token = nextToken;
+        }
+        return token;
+    }
+    
+    private static JavaToken ignoreUntilEol(JavaToken beginToken) {
+        // 削除開始位置から行末まで空白文字以外に改行を含まないコメントがあれば、削除しない
+        JavaToken token = beginToken;
+        boolean containsComments = false;
+        while (true) {
+            final JavaToken.Category category = token.getCategory();
+            if (category.isEndOfLine()) {
+                break;
+            } else if (!category.isWhitespaceOrComment()) {
+                // 行末までに空白文字とコメント以外があれば、削除開始位置は引数のまま
+                return beginToken;
+            } else if (category.isComment()) {
+                containsComments = true;
+                // コメントに改行が含まれていれば、削除開始位置は引数のまま
+                String comment = token.getText();
+                if (comment.indexOf('\n') >= 0 || comment.indexOf('\r') >= 0) {
+                    return beginToken;
+                }
+            }
+            if (!token.getNextToken().isPresent()) {
+                break;
+            }
+            token = token.getNextToken().get();
+        }
+        // 行末までにコメントがなければ、削除開始位置は元のまま
+        return containsComments ? token : beginToken;
     }
 
     /**
